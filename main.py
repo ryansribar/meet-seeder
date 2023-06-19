@@ -4,11 +4,13 @@ import requests
 from bs4 import BeautifulSoup
 from multipledispatch import dispatch
 
+
 # Improvements:
 # 1. UI
 # 2. Swimming Up
 # 3. Making notes for swimmers that just got placed in an event because it did not matter where they went
-# 4. Choice to also take times from last year for the other team
+# 4. Choice to also take times from last year for the other team (would make sure that the swimmer has swum this year)
+# 5. Correct score if there is a tie
 
 # Imports swimmer data from a csv and adds them to a list of lists of swimmers organised by gender and age group
 # such that age_group_list[0] = 8&U Girls, age_group_list[1] = 8&U Boys, etc.
@@ -241,6 +243,7 @@ def trim(ladder):
             # the swimmers below the tentative swimmer in those events
             else:
                 place_index = place + 1
+                tentative_events = []
                 # Loop until 6th place is reached, break manually if they become valid
                 while place_index < 6:
                     tentative_events = swimmer.get_tentative_events().copy()
@@ -360,10 +363,9 @@ def calculate_score(seeds):
     return scores
 
 
-
-if __name__ == '__main__':
+def main():
     print("Importing Shouse times.....", end='')
-    swimmer_list = import_data('newest.csv')
+    swimmer_list = import_data('shouse_times.csv')
     print("Done")
 
     print("Importing other team times", end='')
@@ -383,7 +385,7 @@ if __name__ == '__main__':
     seeds = seed(cleaned_ladder_list)
     print("Done")
 
-    print("\n")
+    print("\n----------------------------------------")
     age_groups = ["8&Under Boys", "8&Under Girls", "9-10 Boys", "9-10 Girls", "11-12 Boys", "11-12 Girls", "13-14 Boys",
                   "13-14 Girls", "15-18 Boys", "15-18 Girls"]
     events = ["Freestyle", "Backstroke", "Breaststroke", "Butterfly"]
@@ -411,11 +413,15 @@ if __name__ == '__main__':
                 if count > 5:
                     break
             event_index += 1
-            print()
+            if ladder.index(event) != len(ladder) - 1:
+                print()
         age_group_index += 1
-        print()
+        print("----------------------------------------")
 
     print("Calculating scores.....")
     scores = calculate_score(seeds)
     print("Shouse: {}".format(scores[0]))
     print("Other team: {}".format(scores[1]))
+
+
+main()
