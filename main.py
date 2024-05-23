@@ -1,8 +1,9 @@
-import csv
 from Swimmer import Swimmer
 import requests
 from bs4 import BeautifulSoup
 from multipledispatch import dispatch
+from ImportData import ImportData
+from Enums import Team
 
 
 # Improvements:
@@ -19,34 +20,6 @@ from multipledispatch import dispatch
 # Logic is wrong for the Nicholas scenario, need to check if there are swimmers that can replace him and if he is close
 # to beating the other swimmer in the other event
 # Need to check if people are likely to beat the swimmer in second in the Max scenario
-
-# Imports swimmer data from a csv and adds them to a list of lists of swimmers organised by gender and age group
-# such that age_group_list[0] = 8&U Girls, age_group_list[1] = 8&U Boys, etc.
-@dispatch(str)
-def import_data(filename):
-    swimmer_list = []
-    with open(filename) as csvfile:
-        data_file = csv.reader(csvfile, delimiter=',')
-        line = 0
-        for row in data_file:
-            if line > 0:
-                gender = 1
-                if "Boys" in row[0] or "Men" in row[0]:
-                    gender = 0
-                last_name = row[5]
-                first_name = row[6]
-                age = int(row[7])
-                swimmer = Swimmer(first_name, last_name, "Shouse", age, gender)
-                if swimmer not in swimmer_list:
-                    swimmer_list.append(swimmer)
-                else:
-                    swimmer = swimmer_list[swimmer_list.index(swimmer)]
-                event = row[10]
-                if event != "Individual Medley":
-                    time = row[3]
-                    swimmer.set_time(event, time)
-            line += 1
-    return swimmer_list
 
 
 # Imports data from the myNVSL website, returns a list of swimmers
@@ -181,8 +154,8 @@ def create_ladders(swimmer_list):
 # Takes a list of ladders and "cleans" it by removing all occurrences of swimmers in swimmer_list from the ladder
 # Returns the cleaned ladders in a list
 def clean_ladders(ladder_list, swimmer_list):
-    absent_list = ["Katelyn Armstrong", "Ben Phillips", "Farrah Cupala", "Rachel Ho", "Jason Ho", "Rohan Honganoor",
-                   "Chloe Gao", "Samantha Stewart", "Alice Ru", "Nya Lewin"]
+    absent_list = ["Ben Phillips", "James Garver", "Elliot Rhines", "Katelyn Armstrong", "Chloe Gao",
+                   "Charles Williams"]
     flag = 0
     for swimmer_name in absent_list:
         name = swimmer_name.split(" ")
@@ -229,21 +202,25 @@ def seed(ladder_list):
 # swimmer in the place where they are supposed to win by the most
 # 7. Once a swimmer is seeded in a place, they are locked in to that event because they will score the most points there
 def trim(ladder):
+    event_indexes = [0, 0, 0, 0]
     for place in range(10):
         # Get the swimmer at the place/event in the ladder and add that event to their tentative list of events
         for event in range(4):
             if place >= len(ladder[event]):
                 break
-            swimmer = ladder[event][place]
+            swimmer = ladder[event][event_indexes[event]]
             swimmer.add_tentative_event(event)
-        # Go through the place that was just seeded and check to make sure each swimmer is valid (in > 2 events)
+        # Go through the place that was just seeded and check to make sure each swimmer is valid (in < 2 events)
         for event in range(4):
             if place >= len(ladder[event]):
                 break
-            swimmer = ladder[event][place]
+            swimmer = ladder[event][event_indexes[event]]
             # If they are valid, seed them in the event(s) they are tentatively in
             if swimmer.is_valid():
-                swimmer.seed(event)
+                # If they are not already seeded, seed them in the event
+                if swimmer.get_num_events() != 2:
+                    swimmer.seed(event)
+                    event_indexes[event] += 1
                 # If they are now in two events, remove them from the ladder
                 if swimmer.get_num_events() == 2:
                     remove_from_ladder(swimmer, ladder)
@@ -262,7 +239,7 @@ def trim(ladder):
                         # Check to make sure there is a swimmer here in the ladder
                         if place_index < len(ladder[tentative_event]):
                             team = ladder[tentative_event][place_index].team
-                            if team == swimmer.get_team:
+                            if team == swimmer.get_team():
                                 same_count += 1
                             else:
                                 other_count += 1
@@ -276,14 +253,17 @@ def trim(ladder):
                     # If there is 1 event with swimmers on the other team beneath where this swimmer is seeded, seed the
                     # swimmer in that event
                     elif other_count == 1:
-                        swimmer.seed(teams.index(swimmer.get_other_team))
+                        swimmer.seed(teams.index(swimmer.get_other_team()))
+                        event_indexes[teams.index(swimmer.get_other_team())] += 1
                     else:
                         # If there are just two events with swimmers from the other team at this place, seed the
-                        # tentative swimmer in those two events
+                        # tentative swimmer in those two events and remove any other tentative events
                         if other_count == 2 and swimmer.get_num_events() == 0:
                             for i in range(2):
                                 swimmer.seed(teams.index(swimmer.get_other_team()))
+                                event_indexes[teams.index(swimmer.get_other_team())] += 1
                                 teams[teams.index(swimmer.get_other_team())] = None
+                            swimmer.set_tentative_events([])
                         # Otherwise remove the tentative events that have swimmers from the same team below the
                         # tentative swimmer, then set the tentative events to the events that are left
                         else:
@@ -337,7 +317,7 @@ def trim(ladder):
 # their event list
 def remove_from_ladder(swimmer, ladder):
     events = [0, 1, 2, 3]
-    for event in swimmer.events:
+    for event in swimmer.get_events():
         events.remove(event)
     for event in events:
         if swimmer in ladder[event]:
@@ -347,7 +327,7 @@ def remove_from_ladder(swimmer, ladder):
 # Find the first occurrence of the other team starting at place in the ladder in the tentative events for the swimmer
 # Returns 0 if there are no occurrences, otherwise returns the place of the occurrence
 def find_other_team_place(swimmer, ladder, place):
-    event = swimmer.tentative_events[0]
+    event = swimmer.get_tentative_events()[0]
     for i in range(place, len(ladder[event])):
         if ladder[event][place].get_team != swimmer.get_team:
             return place
@@ -372,14 +352,14 @@ def calculate_score(seeds):
 
 
 def main():
-    print("Importing Shouse times.....", end='')
-    swimmer_list = import_data('shouse_times.csv')
+    print("Importing Home times.....", end='')
+    swimmer_list = ImportData.import_from_csv('shouse_times.csv', Team.HOME)
     print("Done")
 
     print("Importing other team times", end='')
-    swimmer_list += import_data("https://www.mynvsl.com/leaders?post=1&mt=0&age=", "&sex=", "&st=1&stroke=",
-                                "&m=1&year=2023&count=25&division=&team=288")
+    swimmer_list_2 = ImportData.import_from_myNVSL(Team.AWAY, 261)
     print("Done")
+    print(swimmer_list_2)
 
     print("Creating ladders.....", end='')
     ladder_list = create_ladders(swimmer_list)
