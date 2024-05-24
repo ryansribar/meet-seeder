@@ -1,7 +1,4 @@
 from Swimmer import Swimmer
-import requests
-from bs4 import BeautifulSoup
-from multipledispatch import dispatch
 from ImportData import ImportData
 from Enums import Team
 
@@ -16,106 +13,6 @@ from Enums import Team
 # 7. Make the csv parsing not use given indexes for each part, instead find the right index based on the first line of
 # the csv file
 # 8. Make notes for psych monster
-
-# Logic is wrong for the Nicholas scenario, need to check if there are swimmers that can replace him and if he is close
-# to beating the other swimmer in the other event
-# Need to check if people are likely to beat the swimmer in second in the Max scenario
-
-
-# Imports data from the myNVSL website, returns a list of swimmers
-# Takes the first, second, third, and fourth parts of the link; the parts in between are updated to get the correct link
-# for each age-group/gender/event
-@dispatch(str, str, str, str)
-def import_data(first, second, third, fourth):
-    swimmer_list = []
-    url = first
-    for age in range(1, 6):
-        # Update the url with the age then add the second part
-        url += str(age) + second
-        for gender in range(1, 3):
-            # Update the url with the gender then add the third part
-            url += str(gender) + third
-            for event in range(4):
-                # Update the url with the event/distance
-                if age < 2 or (age == 2 and event == 3):
-                    url += "25-"
-                else:
-                    url += "50-"
-                if event == 0:
-                    url += "free"
-                elif event == 1:
-                    url += "back"
-                elif event == 2:
-                    url += "breast"
-                elif event == 3:
-                    url += "fly"
-                url += fourth
-                webpage = requests.get(url)
-                soup = BeautifulSoup(webpage.content, "html.parser")
-                # the way the website does it is weird, there is a different class depending on if the swimmer has an
-                # odd or even place ranking, so there is two lists
-                swimmer_list_odds = soup.findAll(class_="odd")
-                swimmer_list_evens = soup.findAll(class_="even")
-                for swimmer in swimmer_list_odds:
-                    add_swimmer(swimmer_list, swimmer, gender, event)
-                for swimmer in swimmer_list_evens:
-                    add_swimmer(swimmer_list, swimmer, gender, event)
-                # Get the same url but without the last part to generate a new one
-                url = first + str(age) + second + str(gender) + third
-            # Get the same url but without the last two parts to generate a new one
-            url = first + str(age) + second
-        print(".", end='')
-        url = first
-    return swimmer_list
-
-
-# Adds the given swimmer and to the swimmer_list and/or updates their time in the event
-def add_swimmer(swimmer_list, swimmer_element, gender, event):
-    index = 0
-    gender -= 1
-    first_name = ""
-    last_name = ""
-    team = "Other"
-    age = 0
-    time = None
-    for element in swimmer_element.findAll("td"):
-        # index 1 is the time
-        if index == 1:
-            # split the string in case of a time > 1 minute
-            temp = element.string.split(":")
-            if len(temp) > 1:
-                time = int(temp[0]) * 6000 + int(float(temp[1]) * 100)
-            else:
-                time = int(float(element.string) * 100)
-        # index 2 is the swimmer name
-        elif index == 2:
-            name = element.string.split()
-            first_name = name[0]
-            # some names include the middle initial, so check for that
-            if len(name) > 2:
-                last_name = name[2]
-            else:
-                last_name = name[1]
-        # index 3 is the age
-        elif index == 3:
-            age = int(element.string)
-            # convert old 25 times to 50s
-            '''
-            if age == 8:
-                for event in range(3):
-                    if swimmer.get_time(event) is not None:
-                        swimmer.set_time(event, swimmer.get_time(event) * 2.2)
-            if age == 10:
-                if swimmer.get_time(3) is not None:
-                    swimmer.set_time(3, swimmer.get_time(3) * 2.2)
-            '''
-        index += 1
-    swimmer = Swimmer(first_name, last_name, team, age, gender)
-    if swimmer not in swimmer_list:
-        swimmer_list.append(swimmer)
-    else:
-        swimmer = swimmer_list[swimmer_list.index(swimmer)]
-    swimmer.set_time(event, time)
 
 
 # Create Ladders:
@@ -352,14 +249,13 @@ def calculate_score(seeds):
 
 
 def main():
-    print("Importing Home times.....", end='')
+    print("Importing CSV times.....", end='')
     swimmer_list = ImportData.import_from_csv('shouse_times.csv', Team.HOME)
     print("Done")
 
-    print("Importing other team times", end='')
+    print("Importing myNVSL team times", end='')
     swimmer_list_2 = ImportData.import_from_myNVSL(Team.AWAY, 261)
     print("Done")
-    print(swimmer_list_2)
 
     print("Creating ladders.....", end='')
     ladder_list = create_ladders(swimmer_list)

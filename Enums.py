@@ -17,6 +17,8 @@ class Event(Enum):
     BREASTSTROKE = "breast"
     BUTTERFLY = "fly"
 
+    # Return: an Event
+    # Parameters: str event_str
     # Function to convert from an event string to an Event
     @staticmethod
     def get_event(event_str):
@@ -31,7 +33,8 @@ class Event(Enum):
         else:
             return None
 
-class Group(Enum):
+
+class AgeGroup(Enum):
     EIGHT_UNDER = 1
     NINE_TEN = 2
     ELEVEN_TWELVE = 3
